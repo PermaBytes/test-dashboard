@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Cyberpunk Panel Final</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--main:#00ffee;--bg:#050505;}
+body{margin:0;font-family:Orbitron,sans-serif;background:var(--bg);color:var(--main);transition:0.4s;}
+body.root{--main:#ff2b2b;--bg:#120000;}
+.panel{width:1100px;height:700px;margin:40px auto;border:2px solid var(--main);box-shadow:0 0 40px var(--main);display:flex;padding:15px;}
+.buttons{width:220px;display:flex;flex-direction:column;gap:12px;}
+button{background:none;border:2px solid var(--main);color:var(--main);padding:12px;font-weight:bold;cursor:pointer;}
+button:hover{box-shadow:0 0 20px var(--main) inset;}
+.main{flex:1;margin-left:15px;display:flex;flex-direction:column;}
+.display{border:2px solid var(--main);flex:1;padding:10px;overflow:auto;background:#000;font-family:monospace;}
+input{background:#000;border:2px solid var(--main);color:var(--main);padding:6px;margin-top:6px;font-family:monospace;}
+textarea{background:#000;color:var(--main);border:2px solid var(--main);height:120px;margin-top:10px;}
+a{color:var(--main);}
+</style>
+</head>
+<body>
+<div class="panel">
+  <div class="buttons" id="buttons"></div>
+  <div class="main">
+    <div class="display" id="output">Sistema iniciado…</div>
+    <input id="terminal" placeholder="> comando">
+    <textarea id="notes" placeholder="Notas rápidas (guardadas automáticamente)"></textarea>
+  </div>
+</div>
+
+<audio id="sndNormal" src="https://www.soundjay.com/button/beep-07.wav"></audio>
+<audio id="sndRoot" src="https://www.soundjay.com/button/beep-10.wav"></audio>
+
+<script>
+// Estado
+let root=false;
+const out=document.getElementById("output");
+const term=document.getElementById("terminal");
+const notes=document.getElementById("notes");
+notes.value=localStorage.notes||"";
+notes.oninput=()=>localStorage.notes=notes.value;
+
+// Sonidos
+function sound(){(root?rootSound:normalSound)();}
+const normalSound=()=>{sndNormal.currentTime=0;sndNormal.play();}
+const rootSound=()=>{sndRoot.currentTime=0;sndRoot.play();}
+
+// Logging
+function log(t){out.innerHTML+=`<div>${t}</div>`;out.scrollTop=9999;sound();}
+
+// UI Normal
+function normalUI(){
+buttons.innerHTML=`
+<button onclick="clock()">Reloj</button>
+<button onclick="calc()">Calculadora</button>
+<button onclick="clipboard()">Portapapeles</button>
+<button onclick="openLink('https://google.com')">Google</button>
+<button onclick="openLink('https://github.com')">GitHub</button>
+<button onclick="openLink('https://youtube.com')">YouTube</button>
+<button onclick="activateRoot()">Activar ROOT</button>`;
+}
+
+// UI Root
+function rootUI(){
+buttons.innerHTML=`
+<button onclick="osint()">OSINT HUB</button>
+<button onclick="intel()">Threat Intel</button>
+<button onclick="ipInfo()">IP Info</button>
+<button onclick="hashTool()">Hash Tool</button>
+<button onclick="encodeDecode()">Encode/Decode</button>
+<button onclick="usernameCheck()">Username OSINT</button>
+<button onclick="envInfo()">Env Info</button>
+<button onclick="exitRoot()">Salir ROOT</button>`;
+}
+
+// Activar Root
+function activateRoot(){
+const p=prompt("ROOT PASSWORD:");
+if(p==="3008"){
+root=true;
+document.body.classList.add("root");
+rootUI();
+log("ROOT ACTIVADO");
+}else log("Contraseña incorrecta");
+}
+
+function exitRoot(){
+root=false;
+document.body.classList.remove("root");
+normalUI();
+log("ROOT CERRADO");
+}
+
+// Funciones Normal
+function clock(){log(new Date().toLocaleString());}
+function calc(){let e=prompt("Operacion:");try{log("Resultado: "+eval(e))}catch{log("Error");}}
+function clipboard(){navigator.clipboard.readText().then(t=>log("Clipboard: "+t));}
+function openLink(u){window.open(u,"_blank");sound();}
+
+// ROOT FUNCIONES AVANZADAS
+async function ipInfo(){
+try{
+  const ip = await fetch("https://api.ipify.org?format=json").then(r=>r.json());
+  const info = await fetch(`https://ipinfo.io/${ip.ip}/json?token=YOUR_TOKEN_HERE`).then(r=>r.json());
+  log(`IP: ${info.ip}, Org: ${info.org}, Ciudad: ${info.city}, Pais: ${info.country}`);
+}catch{log("No se pudo obtener info IP");}
+}
+
+function osint(){
+log("OSINT HUB:");
+["IntelX","OSINT Framework","Shodan","Censys"].forEach(s=>log(`<a href="https://${s.replace(/\s+/g,'').toLowerCase()}.com" target="_blank">${s}</a>`));
+}
+
+function intel(){
+log("Threat Intel:");
+["The Hacker News","BleepingComputer","KrebsOnSecurity"].forEach(s=>log(`<a href="https://${s.replace(/\s+/g,'').toLowerCase()}.com" target="_blank">${s}</a>`));
+}
+
+function envInfo(){
+log(`UserAgent: ${navigator.userAgent}`);
+log(`Idioma: ${navigator.language}`);
+log(`CPU Cores: ${navigator.hardwareConcurrency}`);
+log(`RAM: ${navigator.deviceMemory || 'Desconocida'} GB`);
+log(`Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
+}
+
+async function hashTool(){
+const txt=prompt("Texto a hashear:");
+if(!txt)return;
+const enc=new TextEncoder().encode(txt);
+const sha=await crypto.subtle.digest("SHA-256",enc);
+const hash=[...new Uint8Array(sha)].map(b=>b.toString(16).padStart(2,'0')).join('');
+log(`SHA256: ${hash}`);
+}
+
+function encodeDecode(){
+const txt=prompt("Texto:");
+if(!txt)return;
+log("Base64 Encode: "+btoa(txt));
+log("Base64 Decode: "+atob(btoa(txt)));
+log("URL Encode: "+encodeURIComponent(txt));
+log("URL Decode: "+decodeURIComponent(encodeURIComponent(txt)));
+}
+
+function usernameCheck(){
+const u=prompt("Username:");
+if(!u)return;
+["github","reddit","twitter","instagram"].forEach(s=>log(`<a href="https://${s}.com/${u}" target="_blank">${s}</a>`));
+}
+
+// TERMINAL
+term.addEventListener("keydown",e=>{
+if(e.key==="Enter"){
+const c=term.value.trim().toLowerCase();
+term.value="";
+if(!root){
+switch(c){
+case "help": log("help, time, date, clear"); break;
+case "time": clock(); break;
+case "date": clock(); break;
+case "clear": out.innerHTML=""; break;
+default: log("Comando desconocido");
+}
+}else{
+switch(c){
+case "whoami": log("root@cyberpunk"); break;
+case "ipinfo": ipInfo(); break;
+case "osint": osint(); break;
+case "intel": intel(); break;
+case "hash": hashTool(); break;
+case "encode": encodeDecode(); break;
+case "decode": encodeDecode(); break;
+case "username": usernameCheck(); break;
+case "env": envInfo(); break;
+case "clear": out.innerHTML=""; break;
+case "exit": exitRoot(); break;
+default: log("Comando ROOT desconocido");
+}
+}
+}
+});
+
+// Inicial
+normalUI();
+</script>
+</body>
+</html>
