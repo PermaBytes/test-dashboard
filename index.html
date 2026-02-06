@@ -2,30 +2,50 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cyberpunk Panel Final</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
 <style>
-:root{--main:#00ffee;--bg:#050505;}
-body{margin:0;font-family:Orbitron,sans-serif;background:var(--bg);color:var(--main);transition:0.4s;}
-body.root{--main:#ff2b2b;--bg:#120000;}
-.panel{width:1100px;height:700px;margin:40px auto;border:2px solid var(--main);box-shadow:0 0 40px var(--main);display:flex;padding:15px;}
-.buttons{width:220px;display:flex;flex-direction:column;gap:12px;}
-button{background:none;border:2px solid var(--main);color:var(--main);padding:12px;font-weight:bold;cursor:pointer;}
+:root{--main:#00ffee;--bg:#050505;--panel:#000;--muted:#6ff;}
+body{margin:0;font-family:Orbitron,sans-serif;background:var(--bg);color:var(--main);transition:.35s;}
+body.root{--main:#ff2b2b;--bg:#120000;--muted:#ff7a7a;}
+.panel{width:min(1200px,95vw);min-height:760px;margin:24px auto;border:2px solid var(--main);box-shadow:0 0 40px color-mix(in srgb,var(--main),transparent 30%);display:flex;flex-direction:column;padding:12px;gap:12px;}
+.status{display:flex;justify-content:space-between;border:1px solid var(--main);padding:8px 10px;font-size:12px;background:#000;}
+.workspace{display:flex;gap:12px;flex:1;min-height:680px;}
+.buttons{width:250px;display:flex;flex-direction:column;gap:10px;}
+button{background:none;border:2px solid var(--main);color:var(--main);padding:10px;font-weight:bold;cursor:pointer;font-family:inherit;}
 button:hover{box-shadow:0 0 20px var(--main) inset;}
-.main{flex:1;margin-left:15px;display:flex;flex-direction:column;}
-.display{border:2px solid var(--main);flex:1;padding:10px;overflow:auto;background:#000;font-family:monospace;}
-input{background:#000;border:2px solid var(--main);color:var(--main);padding:6px;margin-top:6px;font-family:monospace;}
-textarea{background:#000;color:var(--main);border:2px solid var(--main);height:120px;margin-top:10px;}
+button.small{padding:6px 10px;font-size:12px;}
+.main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.display{border:2px solid var(--main);flex:1;padding:10px;overflow:auto;background:var(--panel);font-family:monospace;}
+.display h3,.display h4{margin:0 0 8px;color:var(--main);}
+.display .card{border:1px solid var(--main);padding:10px;margin:8px 0;background:rgba(0,255,255,.03);}
+.display .muted{color:var(--muted);font-size:12px;}
+input,textarea,select{background:#000;border:2px solid var(--main);color:var(--main);padding:6px;margin-top:8px;font-family:monospace;}
+input::placeholder,textarea::placeholder{color:var(--muted);}
+textarea{height:120px;resize:vertical;}
 a{color:var(--main);}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.todo-item{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:6px;border:1px solid var(--main);margin-top:6px;}
+.todo-item.done span{text-decoration:line-through;opacity:.7;}
+.game-btn{min-width:120px;}
 </style>
 </head>
 <body>
 <div class="panel">
-  <div class="buttons" id="buttons"></div>
-  <div class="main">
-    <div class="display" id="output">Sistema iniciado…</div>
-    <input id="terminal" placeholder="> comando">
-    <textarea id="notes" placeholder="Notas rápidas (guardadas automáticamente)"></textarea>
+  <div class="status">
+    <div id="statusMode">Modo: USUARIO</div>
+    <div id="statusClock">--:--:--</div>
+    <div id="statusUptime">Uptime: 00:00</div>
+  </div>
+
+  <div class="workspace">
+    <div class="buttons" id="buttons"></div>
+    <div class="main">
+      <div class="display" id="output">Sistema iniciado…</div>
+      <input id="terminal" placeholder="> comando">
+      <textarea id="notes" placeholder="Notas rápidas (guardadas automáticamente)"></textarea>
+    </div>
   </div>
 </div>
 
@@ -33,155 +53,422 @@ a{color:var(--main);}
 <audio id="sndRoot" src="https://www.soundjay.com/button/beep-10.wav"></audio>
 
 <script>
-// Estado
-let root=false;
-const out=document.getElementById("output");
-const term=document.getElementById("terminal");
-const notes=document.getElementById("notes");
-notes.value=localStorage.notes||"";
-notes.oninput=()=>localStorage.notes=notes.value;
+let root = false;
+const bootTime = Date.now();
+const out = document.getElementById("output");
+const term = document.getElementById("terminal");
+const notes = document.getElementById("notes");
+const buttons = document.getElementById("buttons");
+const statusMode = document.getElementById("statusMode");
+const statusClock = document.getElementById("statusClock");
+const statusUptime = document.getElementById("statusUptime");
 
-// Sonidos
-function sound(){(root?rootSound:normalSound)();}
-const normalSound=()=>{sndNormal.currentTime=0;sndNormal.play();}
-const rootSound=()=>{sndRoot.currentTime=0;sndRoot.play();}
+const commandHistory = [];
+let historyIndex = -1;
+let pomodoroInterval = null;
+let pomodoroRemaining = 25 * 60;
+let gameState = JSON.parse(localStorage.gameState || '{"wins":0,"losses":0,"draws":0,"streak":0}');
+let todos = JSON.parse(localStorage.todos || '[]');
 
-// Logging
-function log(t){out.innerHTML+=`<div>${t}</div>`;out.scrollTop=9999;sound();}
+notes.value = localStorage.notes || "";
+notes.oninput = () => localStorage.notes = notes.value;
 
-// UI Normal
+const normalSound = () => { sndNormal.currentTime = 0; sndNormal.play().catch(() => {}); };
+const rootSound = () => { sndRoot.currentTime = 0; sndRoot.play().catch(() => {}); };
+const sound = () => (root ? rootSound : normalSound)();
+
+function escapeHTML(str){
+  return str.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+function log(t){
+  out.innerHTML += `<div>${t}</div>`;
+  out.scrollTop = out.scrollHeight;
+  sound();
+}
+
+function setView(html){
+  out.innerHTML = html;
+  sound();
+}
+
+function updateStatus(){
+  const now = new Date();
+  statusClock.textContent = now.toLocaleTimeString();
+  const seconds = Math.floor((Date.now() - bootTime) / 1000);
+  const mm = String(Math.floor(seconds / 60)).padStart(2, "0");
+  const ss = String(seconds % 60).padStart(2, "0");
+  statusUptime.textContent = `Uptime: ${mm}:${ss}`;
+}
+setInterval(updateStatus, 1000);
+updateStatus();
+
 function normalUI(){
-buttons.innerHTML=`
-<button onclick="clock()">Reloj</button>
-<button onclick="calc()">Calculadora</button>
-<button onclick="clipboard()">Portapapeles</button>
-<button onclick="openLink('https://google.com')">Google</button>
-<button onclick="openLink('https://github.com')">GitHub</button>
-<button onclick="openLink('https://youtube.com')">YouTube</button>
-<button onclick="activateRoot()">Activar ROOT</button>`;
+  buttons.innerHTML = `
+  <button onclick="clock()">Reloj</button>
+  <button onclick="calc()">Calculadora</button>
+  <button onclick="taskManager()">Gestor de Tareas</button>
+  <button onclick="pomodoroPanel()">Pomodoro</button>
+  <button onclick="passwordGenerator()">Generador Password</button>
+  <button onclick="jsonFormatter()">Formatear JSON</button>
+  <button onclick="systemStatus()">Estado del Sistema</button>
+  <button onclick="exportNotes()">Exportar Notas</button>
+  <button onclick="rpsGamePanel()">Juego: Piedra/Papel/Tijera</button>
+  <button onclick="activateRoot()">Activar ROOT</button>`;
 }
 
-// UI Root
 function rootUI(){
-buttons.innerHTML=`
-<button onclick="osint()">OSINT HUB</button>
-<button onclick="intel()">Threat Intel</button>
-<button onclick="ipInfo()">IP Info</button>
-<button onclick="hashTool()">Hash Tool</button>
-<button onclick="encodeDecode()">Encode/Decode</button>
-<button onclick="usernameCheck()">Username OSINT</button>
-<button onclick="envInfo()">Env Info</button>
-<button onclick="exitRoot()">Salir ROOT</button>`;
+  buttons.innerHTML = `
+  <button onclick="osint()">OSINT HUB</button>
+  <button onclick="intel()">Threat Intel</button>
+  <button onclick="ipInfo()">IP Info</button>
+  <button onclick="hashTool()">Hash Tool</button>
+  <button onclick="encodeDecode()">Encode/Decode</button>
+  <button onclick="usernameCheck()">Username OSINT</button>
+  <button onclick="envInfo()">Env Info</button>
+  <button onclick="networkSweep()">Network Sweep (sim)</button>
+  <button onclick="jwtDecoder()">JWT Decoder</button>
+  <button onclick="exitRoot()">Salir ROOT</button>`;
 }
 
-// Activar Root
 function activateRoot(){
-const p=prompt("ROOT PASSWORD:");
-if(p==="3008"){
-root=true;
-document.body.classList.add("root");
-rootUI();
-log("ROOT ACTIVADO");
-}else log("Contraseña incorrecta");
+  const p = prompt("ROOT PASSWORD:");
+  if(p === "3008"){
+    root = true;
+    document.body.classList.add("root");
+    statusMode.textContent = "Modo: ROOT";
+    rootUI();
+    log("ROOT ACTIVADO");
+  }else log("Contraseña incorrecta");
 }
 
 function exitRoot(){
-root=false;
-document.body.classList.remove("root");
-normalUI();
-log("ROOT CERRADO");
+  root = false;
+  document.body.classList.remove("root");
+  statusMode.textContent = "Modo: USUARIO";
+  normalUI();
+  log("ROOT CERRADO");
 }
 
-// Funciones Normal
-function clock(){log(new Date().toLocaleString());}
-function calc(){let e=prompt("Operacion:");try{log("Resultado: "+eval(e))}catch{log("Error");}}
-function clipboard(){navigator.clipboard.readText().then(t=>log("Clipboard: "+t));}
-function openLink(u){window.open(u,"_blank");sound();}
+function clock(){ log(new Date().toLocaleString()); }
 
-// ROOT FUNCIONES AVANZADAS
+function calc(){
+  const e = prompt("Operación matemática:");
+  if(!e) return;
+  if(!/^[0-9+\-*/().,%\s]+$/.test(e)) return log("Operación bloqueada por seguridad");
+  try{ log(`Resultado: ${Function(`return (${e})`)()}`); }
+  catch{ log("Error en operación"); }
+}
+
+function systemStatus(){
+  const mem = performance.memory ? `${Math.round(performance.memory.usedJSHeapSize / 1024 / 1024)} MB` : "No disponible";
+  setView(`
+    <h3>Panel de Estado</h3>
+    <div class="card">🧠 Memoria JS: <b>${mem}</b></div>
+    <div class="card">🌐 Conectado: <b>${navigator.onLine ? "Sí" : "No"}</b></div>
+    <div class="card">🖥 Resolución: <b>${window.innerWidth}x${window.innerHeight}</b></div>
+    <div class="card">📍 Zona horaria: <b>${Intl.DateTimeFormat().resolvedOptions().timeZone}</b></div>
+  `);
+}
+
+function exportNotes(){
+  const blob = new Blob([notes.value], {type:"text/plain;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `notas-panel-${Date.now()}.txt`;
+  a.click();
+  log("Notas exportadas.");
+}
+
+function taskManager(){
+  renderTasks();
+}
+
+function addTask(){
+  const txt = prompt("Nueva tarea:");
+  if(!txt) return;
+  todos.push({id:crypto.randomUUID(), text:txt, done:false});
+  localStorage.todos = JSON.stringify(todos);
+  renderTasks();
+}
+
+function toggleTask(id){
+  todos = todos.map(t => t.id === id ? {...t, done: !t.done} : t);
+  localStorage.todos = JSON.stringify(todos);
+  renderTasks();
+}
+
+function removeTask(id){
+  todos = todos.filter(t => t.id !== id);
+  localStorage.todos = JSON.stringify(todos);
+  renderTasks();
+}
+
+function renderTasks(){
+  const done = todos.filter(t => t.done).length;
+  setView(`
+    <h3>Gestor de Tareas</h3>
+    <div class="muted">Completadas: ${done}/${todos.length}</div>
+    <div class="row"><button class="small" onclick="addTask()">+ Agregar</button><button class="small" onclick="clearDone()">Limpiar completadas</button></div>
+    <div>${todos.map(t => `<div class="todo-item ${t.done ? "done" : ""}"><span>${escapeHTML(t.text)}</span><div><button class="small" onclick="toggleTask('${t.id}')">${t.done ? "↩" : "✓"}</button><button class="small" onclick="removeTask('${t.id}')">🗑</button></div></div>`).join("") || '<div class="card">Sin tareas aún.</div>'}</div>
+  `);
+}
+
+function clearDone(){
+  todos = todos.filter(t => !t.done);
+  localStorage.todos = JSON.stringify(todos);
+  renderTasks();
+}
+
+function pomodoroPanel(){
+  renderPomodoro();
+}
+
+function renderPomodoro(){
+  const mm = String(Math.floor(pomodoroRemaining / 60)).padStart(2, "0");
+  const ss = String(pomodoroRemaining % 60).padStart(2, "0");
+  setView(`
+    <h3>Temporizador Pomodoro</h3>
+    <div class="card" style="font-size:36px;text-align:center;">${mm}:${ss}</div>
+    <div class="row">
+      <button onclick="startPomodoro()">Iniciar</button>
+      <button onclick="pausePomodoro()">Pausar</button>
+      <button onclick="resetPomodoro()">Reset</button>
+      <button onclick="setCustomPomodoro()">Configurar</button>
+    </div>
+  `);
+}
+
+function startPomodoro(){
+  if(pomodoroInterval) return;
+  pomodoroInterval = setInterval(() => {
+    pomodoroRemaining--;
+    if(pomodoroRemaining <= 0){
+      clearInterval(pomodoroInterval);
+      pomodoroInterval = null;
+      pomodoroRemaining = 0;
+      log("✅ Pomodoro completado. Tómate un descanso.");
+    }
+    renderPomodoro();
+  }, 1000);
+}
+
+function pausePomodoro(){
+  clearInterval(pomodoroInterval);
+  pomodoroInterval = null;
+  renderPomodoro();
+}
+
+function resetPomodoro(){
+  pausePomodoro();
+  pomodoroRemaining = 25 * 60;
+  renderPomodoro();
+}
+
+function setCustomPomodoro(){
+  const min = Number(prompt("Minutos:", "25"));
+  if(!Number.isFinite(min) || min < 1 || min > 180) return log("Duración inválida");
+  pausePomodoro();
+  pomodoroRemaining = Math.floor(min * 60);
+  renderPomodoro();
+}
+
+function passwordGenerator(){
+  const len = Number(prompt("Longitud de password (8-64):", "16"));
+  if(!Number.isFinite(len) || len < 8 || len > 64) return log("Longitud inválida");
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()_-+=?";
+  const bytes = new Uint32Array(len);
+  crypto.getRandomValues(bytes);
+  const pwd = Array.from(bytes, n => alphabet[n % alphabet.length]).join("");
+  log(`Password: ${pwd}`);
+}
+
+function jsonFormatter(){
+  const text = prompt("Pega JSON para formatear:");
+  if(!text) return;
+  try{
+    const pretty = JSON.stringify(JSON.parse(text), null, 2);
+    setView(`<h3>JSON Formateado</h3><pre>${escapeHTML(pretty)}</pre>`);
+  }catch{
+    log("JSON inválido.");
+  }
+}
+
+function rpsGamePanel(){
+  setView(`
+    <h3>Mini Juego: Piedra / Papel / Tijera</h3>
+    <div class="card">Victorias: <b>${gameState.wins}</b> | Derrotas: <b>${gameState.losses}</b> | Empates: <b>${gameState.draws}</b> | Racha: <b>${gameState.streak}</b></div>
+    <div class="row">
+      <button class="game-btn" onclick="playRPS('piedra')">🪨 Piedra</button>
+      <button class="game-btn" onclick="playRPS('papel')">📄 Papel</button>
+      <button class="game-btn" onclick="playRPS('tijera')">✂️ Tijera</button>
+      <button class="game-btn" onclick="resetRPS()">Reset score</button>
+    </div>
+    <div class="muted">Juega cuando te aburras 😎</div>
+  `);
+}
+
+function playRPS(user){
+  const options = ["piedra", "papel", "tijera"];
+  const bot = options[Math.floor(Math.random() * options.length)];
+  let result = "empate";
+
+  if(user === bot) gameState.draws++;
+  else if((user === "piedra" && bot === "tijera") || (user === "papel" && bot === "piedra") || (user === "tijera" && bot === "papel")){
+    result = "ganas";
+    gameState.wins++;
+    gameState.streak++;
+  }else{
+    result = "pierdes";
+    gameState.losses++;
+    gameState.streak = 0;
+  }
+
+  localStorage.gameState = JSON.stringify(gameState);
+  log(`Juego => Tú: ${user} | CPU: ${bot} => ${result.toUpperCase()}`);
+  rpsGamePanel();
+}
+
+function resetRPS(){
+  gameState = {wins:0, losses:0, draws:0, streak:0};
+  localStorage.gameState = JSON.stringify(gameState);
+  rpsGamePanel();
+}
+
 async function ipInfo(){
-try{
-  const ip = await fetch("https://api.ipify.org?format=json").then(r=>r.json());
-  const info = await fetch(`https://ipinfo.io/${ip.ip}/json?token=YOUR_TOKEN_HERE`).then(r=>r.json());
-  log(`IP: ${info.ip}, Org: ${info.org}, Ciudad: ${info.city}, Pais: ${info.country}`);
-}catch{log("No se pudo obtener info IP");}
+  try{
+    const ip = await fetch("https://api.ipify.org?format=json").then(r => r.json());
+    const info = await fetch(`https://ipapi.co/${ip.ip}/json/`).then(r => r.json());
+    log(`IP: ${info.ip} | Org: ${info.org || "N/A"} | Ciudad: ${info.city} | País: ${info.country_name}`);
+  }catch{log("No se pudo obtener info IP");}
 }
 
 function osint(){
-log("OSINT HUB:");
-["IntelX","OSINT Framework","Shodan","Censys"].forEach(s=>log(`<a href="https://${s.replace(/\s+/g,'').toLowerCase()}.com" target="_blank">${s}</a>`));
+  log("OSINT HUB:");
+  [
+    ["OSINT Framework","https://osintframework.com"],
+    ["Shodan","https://www.shodan.io"],
+    ["IntelX","https://intelx.io"],
+    ["HaveIBeenPwned","https://haveibeenpwned.com"]
+  ].forEach(([n,u]) => log(`<a href="${u}" target="_blank">${n}</a>`));
 }
 
 function intel(){
-log("Threat Intel:");
-["The Hacker News","BleepingComputer","KrebsOnSecurity"].forEach(s=>log(`<a href="https://${s.replace(/\s+/g,'').toLowerCase()}.com" target="_blank">${s}</a>`));
+  log("Threat Intel:");
+  [
+    ["The Hacker News","https://thehackernews.com"],
+    ["BleepingComputer","https://www.bleepingcomputer.com"],
+    ["KrebsOnSecurity","https://krebsonsecurity.com"]
+  ].forEach(([n,u]) => log(`<a href="${u}" target="_blank">${n}</a>`));
 }
 
 function envInfo(){
-log(`UserAgent: ${navigator.userAgent}`);
-log(`Idioma: ${navigator.language}`);
-log(`CPU Cores: ${navigator.hardwareConcurrency}`);
-log(`RAM: ${navigator.deviceMemory || 'Desconocida'} GB`);
-log(`Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
+  log(`UserAgent: ${navigator.userAgent}`);
+  log(`Idioma: ${navigator.language}`);
+  log(`CPU Cores: ${navigator.hardwareConcurrency}`);
+  log(`RAM: ${navigator.deviceMemory || "Desconocida"} GB`);
+  log(`Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
+}
+
+function networkSweep(){
+  const ports = [21,22,53,80,110,143,443,3389,8080];
+  log("Escaneo simulado de puertos locales:");
+  ports.forEach(p => {
+    const state = Math.random() > 0.7 ? "OPEN" : "CLOSED";
+    log(`127.0.0.1:${p} => ${state}`);
+  });
 }
 
 async function hashTool(){
-const txt=prompt("Texto a hashear:");
-if(!txt)return;
-const enc=new TextEncoder().encode(txt);
-const sha=await crypto.subtle.digest("SHA-256",enc);
-const hash=[...new Uint8Array(sha)].map(b=>b.toString(16).padStart(2,'0')).join('');
-log(`SHA256: ${hash}`);
+  const txt = prompt("Texto a hashear:");
+  if(!txt) return;
+  const enc = new TextEncoder().encode(txt);
+  const sha = await crypto.subtle.digest("SHA-256", enc);
+  const hash = [...new Uint8Array(sha)].map(b => b.toString(16).padStart(2,'0')).join('');
+  log(`SHA256: ${hash}`);
 }
 
 function encodeDecode(){
-const txt=prompt("Texto:");
-if(!txt)return;
-log("Base64 Encode: "+btoa(txt));
-log("Base64 Decode: "+atob(btoa(txt)));
-log("URL Encode: "+encodeURIComponent(txt));
-log("URL Decode: "+decodeURIComponent(encodeURIComponent(txt)));
+  const txt = prompt("Texto:");
+  if(!txt) return;
+  log("Base64 Encode: " + btoa(txt));
+  log("Base64 Decode: " + atob(btoa(txt)));
+  log("URL Encode: " + encodeURIComponent(txt));
+  log("URL Decode: " + decodeURIComponent(encodeURIComponent(txt)));
+}
+
+function jwtDecoder(){
+  const token = prompt("JWT:");
+  if(!token) return;
+  try{
+    const payload = token.split(".")[1];
+    const data = JSON.parse(atob(payload.replace(/-/g,'+').replace(/_/g,'/')));
+    setView(`<h3>JWT Payload</h3><pre>${escapeHTML(JSON.stringify(data,null,2))}</pre>`);
+  }catch{ log("JWT inválido"); }
 }
 
 function usernameCheck(){
-const u=prompt("Username:");
-if(!u)return;
-["github","reddit","twitter","instagram"].forEach(s=>log(`<a href="https://${s}.com/${u}" target="_blank">${s}</a>`));
+  const u = prompt("Username:");
+  if(!u) return;
+  ["github","reddit","x","instagram"].forEach(s => log(`<a href="https://${s}.com/${u}" target="_blank">${s}</a>`));
 }
 
-// TERMINAL
-term.addEventListener("keydown",e=>{
-if(e.key==="Enter"){
-const c=term.value.trim().toLowerCase();
-term.value="";
-if(!root){
-switch(c){
-case "help": log("help, time, date, clear"); break;
-case "time": clock(); break;
-case "date": clock(); break;
-case "clear": out.innerHTML=""; break;
-default: log("Comando desconocido");
-}
-}else{
-switch(c){
-case "whoami": log("root@cyberpunk"); break;
-case "ipinfo": ipInfo(); break;
-case "osint": osint(); break;
-case "intel": intel(); break;
-case "hash": hashTool(); break;
-case "encode": encodeDecode(); break;
-case "decode": encodeDecode(); break;
-case "username": usernameCheck(); break;
-case "env": envInfo(); break;
-case "clear": out.innerHTML=""; break;
-case "exit": exitRoot(); break;
-default: log("Comando ROOT desconocido");
-}
-}
-}
+term.addEventListener("keydown", e => {
+  if(e.key === "Enter"){
+    const c = term.value.trim();
+    const lc = c.toLowerCase();
+    if(!c) return;
+    commandHistory.push(c);
+    historyIndex = commandHistory.length;
+    term.value = "";
+
+    if(!root){
+      switch(lc){
+        case "help": log("help, time, date, clear, tasks, pomodoro, game, status, root"); break;
+        case "time":
+        case "date": clock(); break;
+        case "tasks": taskManager(); break;
+        case "pomodoro": pomodoroPanel(); break;
+        case "game": rpsGamePanel(); break;
+        case "status": systemStatus(); break;
+        case "root": activateRoot(); break;
+        case "clear": out.innerHTML = ""; break;
+        default: log("Comando desconocido");
+      }
+    }else{
+      switch(lc){
+        case "whoami": log("root@cyberpunk"); break;
+        case "ipinfo": ipInfo(); break;
+        case "osint": osint(); break;
+        case "intel": intel(); break;
+        case "hash": hashTool(); break;
+        case "encode":
+        case "decode": encodeDecode(); break;
+        case "username": usernameCheck(); break;
+        case "env": envInfo(); break;
+        case "sweep": networkSweep(); break;
+        case "jwt": jwtDecoder(); break;
+        case "clear": out.innerHTML = ""; break;
+        case "exit": exitRoot(); break;
+        default: log("Comando ROOT desconocido");
+      }
+    }
+  }
+
+  if(e.key === "ArrowUp"){
+    if(commandHistory.length === 0) return;
+    historyIndex = Math.max(0, historyIndex - 1);
+    term.value = commandHistory[historyIndex] || "";
+    e.preventDefault();
+  }
+  if(e.key === "ArrowDown"){
+    if(commandHistory.length === 0) return;
+    historyIndex = Math.min(commandHistory.length, historyIndex + 1);
+    term.value = commandHistory[historyIndex] || "";
+    e.preventDefault();
+  }
 });
 
-// Inicial
 normalUI();
 </script>
 </body>
