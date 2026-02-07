@@ -191,7 +191,7 @@ normalUI();
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cyberpunk Panel Final v4.0</title>
+<title>Cyberpunk Panel Final v4.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
 <style>
 :root{--main:#8a7dff;--bg:#080814;--panel:#05050d;--muted:#c6beff;}
@@ -225,9 +225,9 @@ a{color:var(--main);}
 </style>
 </head>
 <body>
-<div class="badge pulse">✅ CAMBIO REAL v4.0</div>
+<div class="badge pulse">✅ CAMBIO REAL v4.1</div>
 <div class="panel">
-  <div class="brand">🚀 CYBERPUNK PANEL v4.0 — CAMBIOS VISIBLES DE VERDAD</div>
+  <div class="brand">🚀 CYBERPUNK PANEL v4.1 — MÁS FUNCIONES REALES</div>
   <div class="status">
     <div id="statusMode">Modo: USUARIO</div>
     <div id="statusClock">--:--:--</div>
@@ -237,7 +237,7 @@ a{color:var(--main);}
   <div class="workspace">
     <div class="buttons" id="buttons"></div>
     <div class="main">
-      <div class="display" id="output">Sistema iniciado…<div class="card">🔥 ACTUALIZACIÓN TOTAL A <b>v4.0</b><br>Si ves este bloque morado + badge flotante, este archivo SÍ cambió.</div></div>
+      <div class="display" id="output">Sistema iniciado…<div class="card">🔥 ACTUALIZACIÓN TOTAL A <b>v4.1</b><br>Ahora incluye funciones nuevas: clima, conversor y tracker de hábitos.</div></div>
       <input id="terminal" placeholder="> comando">
       <textarea id="notes" placeholder="Notas rápidas (guardadas automáticamente)"></textarea>
     </div>
@@ -264,6 +264,7 @@ let pomodoroInterval = null;
 let pomodoroRemaining = 25 * 60;
 let gameState = JSON.parse(localStorage.gameState || '{"wins":0,"losses":0,"draws":0,"streak":0}');
 let todos = JSON.parse(localStorage.todos || '[]');
+let habits = JSON.parse(localStorage.habits || '[]');
 
 notes.value = localStorage.notes || "";
 notes.oninput = () => localStorage.notes = notes.value;
@@ -310,6 +311,9 @@ function normalUI(){
   <button onclick="exportNotes()">Exportar Notas</button>
   <button onclick="rpsGamePanel()">Juego: Piedra/Papel/Tijera</button>
   <button onclick="showNews()">Novedades (visible)</button>
+  <button onclick="weatherPanel()">Clima ahora</button>
+  <button onclick="unitConverter()">Conversor rápido</button>
+  <button onclick="habitTracker()">Tracker hábitos</button>
   <button onclick="activateRoot()">Activar ROOT</button>`;
 }
 
@@ -358,11 +362,11 @@ function calc(){
 
 function showNews(){
   setView(`
-    <h3>Novedades visibles (v4.0)</h3>
-    <div class="card">✅ Nuevo estilo morado y glow más fuerte (v4.0).</div>
-    <div class="card">✅ Badge flotante "CAMBIO REAL v4.0" en pantalla.</div>
-    <div class="card">✅ Banner principal actualizado con texto nuevo.</div>
-    <div class="card">🎮 Juego sigue disponible y el panel conserva funciones avanzadas.</div>
+    <h3>Novedades visibles (v4.1)</h3>
+    <div class="card">✅ Añadidas funciones nuevas reales (v4.1).</div>
+    <div class="card">✅ Clima actual por ciudad con geocoding + API meteo.</div>
+    <div class="card">✅ Conversor de unidades (km/mi, C/F, kg/lb).</div>
+    <div class="card">✅ Tracker de hábitos con persistencia en localStorage.</div>
   `);
 }
 
@@ -384,6 +388,86 @@ function exportNotes(){
   a.download = `notas-panel-${Date.now()}.txt`;
   a.click();
   log("Notas exportadas.");
+}
+
+function weatherPanel(){
+  setView(`
+    <h3>Clima actual</h3>
+    <div class="card">Pulsa para consultar clima por ciudad.</div>
+    <button onclick="fetchWeather()">Consultar clima</button>
+  `);
+}
+
+async function fetchWeather(){
+  const city = prompt("Ciudad para consultar clima:", "Madrid");
+  if(!city) return;
+  try{
+    const geo = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=es&format=json`).then(r=>r.json());
+    if(!geo.results || !geo.results[0]) return log("Ciudad no encontrada");
+    const g = geo.results[0];
+    const w = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${g.latitude}&longitude=${g.longitude}&current=temperature_2m,apparent_temperature,wind_speed_10m`).then(r=>r.json());
+    const c = w.current;
+    setView(`
+      <h3>Clima en ${escapeHTML(g.name)}, ${escapeHTML(g.country || "")}</h3>
+      <div class="card">🌡 Temperatura: <b>${c.temperature_2m}°C</b></div>
+      <div class="card">🤗 Sensación térmica: <b>${c.apparent_temperature}°C</b></div>
+      <div class="card">💨 Viento: <b>${c.wind_speed_10m} km/h</b></div>
+    `);
+  }catch{
+    log("No se pudo consultar el clima");
+  }
+}
+
+function unitConverter(){
+  const type = prompt("Tipo: km-mi | c-f | kg-lb", "km-mi");
+  if(!type) return;
+  const value = Number(prompt("Valor:"));
+  if(!Number.isFinite(value)) return log("Valor inválido");
+
+  if(type === "km-mi") return log(`${value} km = ${(value*0.621371).toFixed(3)} mi`);
+  if(type === "c-f") return log(`${value} °C = ${((value*9/5)+32).toFixed(2)} °F`);
+  if(type === "kg-lb") return log(`${value} kg = ${(value*2.20462).toFixed(3)} lb`);
+  log("Tipo no soportado. Usa: km-mi, c-f o kg-lb");
+}
+
+function habitTracker(){
+  renderHabits();
+}
+
+function addHabit(){
+  const name = prompt("Nuevo hábito:");
+  if(!name) return;
+  habits.push({id:crypto.randomUUID(), name, done:false});
+  localStorage.habits = JSON.stringify(habits);
+  renderHabits();
+}
+
+function toggleHabit(id){
+  habits = habits.map(h => h.id === id ? {...h, done: !h.done} : h);
+  localStorage.habits = JSON.stringify(habits);
+  renderHabits();
+}
+
+function removeHabit(id){
+  habits = habits.filter(h => h.id !== id);
+  localStorage.habits = JSON.stringify(habits);
+  renderHabits();
+}
+
+function renderHabits(){
+  const done = habits.filter(h => h.done).length;
+  setView(`
+    <h3>Tracker de hábitos</h3>
+    <div class="muted">Completados hoy: ${done}/${habits.length}</div>
+    <div class="row"><button class="small" onclick="addHabit()">+ Agregar hábito</button><button class="small" onclick="resetHabits()">Reset diario</button></div>
+    <div>${habits.map(h => `<div class="todo-item ${h.done ? "done" : ""}"><span>${escapeHTML(h.name)}</span><div><button class="small" onclick="toggleHabit('${h.id}')">${h.done ? "↩" : "✓"}</button><button class="small" onclick="removeHabit('${h.id}')">🗑</button></div></div>`).join("") || '<div class="card">Sin hábitos aún.</div>'}</div>
+  `);
+}
+
+function resetHabits(){
+  habits = habits.map(h => ({...h, done:false}));
+  localStorage.habits = JSON.stringify(habits);
+  renderHabits();
 }
 
 function taskManager(){
@@ -630,7 +714,10 @@ term.addEventListener("keydown", e => {
 
     if(!root){
       switch(lc){
-        case "help": log("help, time, date, clear, tasks, pomodoro, game, novedades, status, root"); break;
+        case "help": log("help, time, date, clear, tasks, habits, weather, convert, pomodoro, game, novedades, status, root"); break;
+        case "weather": weatherPanel(); break;
+        case "convert": unitConverter(); break;
+        case "habits": habitTracker(); break;
         case "novedades": showNews(); break;
         case "time":
         case "date": clock(); break;
