@@ -200,11 +200,18 @@ body.root{--main:#ff2b2b;--bg:#120000;--muted:#ff7a7a;}
 .panel{width:min(1200px,95vw);min-height:760px;margin:24px auto;border:3px solid var(--main);box-shadow:0 0 60px color-mix(in srgb,var(--main),transparent 20%);display:flex;flex-direction:column;padding:12px;gap:12px;}
 .status{display:flex;justify-content:space-between;border:1px solid var(--main);padding:8px 10px;font-size:12px;background:#000;}
 .brand{border:1px solid var(--main);padding:8px 10px;background:#000;text-align:center;font-weight:700;letter-spacing:1px;}
-.workspace{display:flex;gap:12px;flex:1;min-height:680px;}
-.buttons{width:250px;display:flex;flex-direction:column;gap:10px;}
+.workspace{display:flex;gap:12px;flex:1;min-height:680px;align-items:stretch;}
+.buttons{width:330px;display:flex;flex-direction:column;gap:10px;border:1px solid var(--main);padding:10px;background:#05050d;min-height:0;}
+.menu-head{display:flex;flex-direction:column;gap:8px;position:sticky;top:0;background:#05050d;z-index:2;padding-bottom:6px;}
+.menu-scroll{overflow:auto;min-height:0;padding-right:4px;}
+.menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.menu-section{grid-column:1/-1;font-size:11px;letter-spacing:1px;opacity:.9;border-top:1px dashed var(--main);padding-top:8px;margin-top:4px;}
 button{background:none;border:2px solid var(--main);color:var(--main);padding:10px;font-weight:bold;cursor:pointer;font-family:inherit;}
 button:hover{box-shadow:0 0 20px var(--main) inset;}
 button.small{padding:6px 10px;font-size:12px;}
+.menu-btn{font-size:12px;padding:8px;}
+.menu-btn.hidden{display:none;}
+@media (max-width: 980px){.workspace{flex-direction:column;}.buttons{width:auto;max-height:300px;}}
 .main{flex:1;display:flex;flex-direction:column;min-width:0;}
 .display{border:2px solid var(--main);flex:1;padding:10px;overflow:auto;background:var(--panel);font-family:monospace;}
 .display h3,.display h4{margin:0 0 8px;color:var(--main);}
@@ -301,34 +308,70 @@ updateStatus();
 
 function normalUI(){
   buttons.innerHTML = `
-  <button onclick="clock()">Reloj</button>
-  <button onclick="calc()">Calculadora</button>
-  <button onclick="taskManager()">Gestor de Tareas</button>
-  <button onclick="pomodoroPanel()">Pomodoro</button>
-  <button onclick="passwordGenerator()">Generador Password</button>
-  <button onclick="jsonFormatter()">Formatear JSON</button>
-  <button onclick="systemStatus()">Estado del Sistema</button>
-  <button onclick="exportNotes()">Exportar Notas</button>
-  <button onclick="rpsGamePanel()">Juego: Piedra/Papel/Tijera</button>
-  <button onclick="showNews()">Novedades (visible)</button>
-  <button onclick="weatherPanel()">Clima ahora</button>
-  <button onclick="unitConverter()">Conversor rápido</button>
-  <button onclick="habitTracker()">Tracker hábitos</button>
-  <button onclick="activateRoot()">Activar ROOT</button>`;
+  <div class="menu-head">
+    <div class="muted">Panel de acciones (Usuario)</div>
+    <input id="menuFilter" placeholder="filtrar opciones..." oninput="filterButtons(this.value)">
+  </div>
+  <div class="menu-scroll">
+    <div class="menu-grid">
+      <div class="menu-section">UTILIDADES</div>
+      <button class="menu-btn" data-label="reloj tiempo" onclick="clock()">Reloj</button>
+      <button class="menu-btn" data-label="calculadora" onclick="calc()">Calculadora</button>
+      <button class="menu-btn" data-label="estado sistema" onclick="systemStatus()">Estado sistema</button>
+      <button class="menu-btn" data-label="exportar notas" onclick="exportNotes()">Exportar notas</button>
+
+      <div class="menu-section">PRODUCTIVIDAD</div>
+      <button class="menu-btn" data-label="tareas" onclick="taskManager()">Gestor tareas</button>
+      <button class="menu-btn" data-label="pomodoro" onclick="pomodoroPanel()">Pomodoro</button>
+      <button class="menu-btn" data-label="password" onclick="passwordGenerator()">Generar pass</button>
+      <button class="menu-btn" data-label="json" onclick="jsonFormatter()">Formatear JSON</button>
+      <button class="menu-btn" data-label="habitos" onclick="habitTracker()">Tracker hábitos</button>
+
+      <div class="menu-section">EXTRAS</div>
+      <button class="menu-btn" data-label="juego piedra papel tijera" onclick="rpsGamePanel()">Mini juego</button>
+      <button class="menu-btn" data-label="clima weather" onclick="weatherPanel()">Clima ahora</button>
+      <button class="menu-btn" data-label="conversor" onclick="unitConverter()">Conversor</button>
+      <button class="menu-btn" data-label="novedades" onclick="showNews()">Novedades</button>
+
+      <div class="menu-section">MODO</div>
+      <button class="menu-btn" data-label="activar root" onclick="activateRoot()">Activar ROOT</button>
+    </div>
+  </div>`;
 }
 
 function rootUI(){
   buttons.innerHTML = `
-  <button onclick="osint()">OSINT HUB</button>
-  <button onclick="intel()">Threat Intel</button>
-  <button onclick="ipInfo()">IP Info</button>
-  <button onclick="hashTool()">Hash Tool</button>
-  <button onclick="encodeDecode()">Encode/Decode</button>
-  <button onclick="usernameCheck()">Username OSINT</button>
-  <button onclick="envInfo()">Env Info</button>
-  <button onclick="networkSweep()">Network Sweep (sim)</button>
-  <button onclick="jwtDecoder()">JWT Decoder</button>
-  <button onclick="exitRoot()">Salir ROOT</button>`;
+  <div class="menu-head">
+    <div class="muted">Panel de acciones (ROOT)</div>
+    <input id="menuFilter" placeholder="filtrar opciones root..." oninput="filterButtons(this.value)">
+  </div>
+  <div class="menu-scroll">
+    <div class="menu-grid">
+      <div class="menu-section">INTEL / OSINT</div>
+      <button class="menu-btn" data-label="osint" onclick="osint()">OSINT HUB</button>
+      <button class="menu-btn" data-label="intel noticias" onclick="intel()">Threat Intel</button>
+      <button class="menu-btn" data-label="ip info" onclick="ipInfo()">IP Info</button>
+      <button class="menu-btn" data-label="username" onclick="usernameCheck()">Username OSINT</button>
+
+      <div class="menu-section">HERRAMIENTAS</div>
+      <button class="menu-btn" data-label="hash" onclick="hashTool()">Hash Tool</button>
+      <button class="menu-btn" data-label="encode decode" onclick="encodeDecode()">Encode/Decode</button>
+      <button class="menu-btn" data-label="jwt" onclick="jwtDecoder()">JWT Decoder</button>
+      <button class="menu-btn" data-label="entorno" onclick="envInfo()">Env Info</button>
+      <button class="menu-btn" data-label="network sweep" onclick="networkSweep()">Network Sweep</button>
+
+      <div class="menu-section">MODO</div>
+      <button class="menu-btn" data-label="salir root" onclick="exitRoot()">Salir ROOT</button>
+    </div>
+  </div>`;
+}
+
+function filterButtons(query){
+  const q = (query || "").toLowerCase().trim();
+  buttons.querySelectorAll('.menu-btn').forEach(btn => {
+    const label = (btn.dataset.label || btn.textContent || "").toLowerCase();
+    btn.classList.toggle('hidden', q && !label.includes(q));
+  });
 }
 
 function activateRoot(){
